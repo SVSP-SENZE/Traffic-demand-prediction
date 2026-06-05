@@ -1,0 +1,89 @@
+============================================================
+FLIPKART GRID HACKATHON 2.0 — SUBMISSION COMMENTS
+Problem: Traffic Demand Prediction
+============================================================
+
+------------------------------------------------------------
+APPROACH SUMMARY
+------------------------------------------------------------
+
+We solved this as a regression problem predicting normalized
+traffic demand using an ensemble of three gradient boosting
+models: LightGBM, XGBoost, and CatBoost.
+
+------------------------------------------------------------
+KEY DECISIONS
+------------------------------------------------------------
+
+1. MISSING VALUE HANDLING
+   - Weather and RoadType filled with training set mode
+   - Temperature filled with training set median
+   - All fill values derived from training data only to avoid
+     any data leakage into test features
+
+2. FEATURE ENGINEERING
+   - Geohash decoded to lat/lon coordinates using geohash2 library
+   - Timestamp parsed into hour/minute with cyclical sin/cos
+     encodings to capture periodic patterns (e.g. morning peak
+     looks similar to next-day morning peak)
+   - Peak-hour and night flags added as domain-informed features
+   - KMeans clustering (k=4, k=5) on lat/lon to group spatially
+     similar zones
+   - K-Fold target encoding (5 splits) to embed demand statistics
+     per geohash, geohash×hour, and geohash×day without leakage
+
+3. MODELS
+   - All three models use 2000 estimators with low learning rate
+     (0.02) and early stopping (100 rounds patience) on a 20%
+     held-out validation set
+   - Regularization (L1 + L2) applied to prevent overfitting
+
+4. ENSEMBLE
+   - Blend weights optimized via Nelder-Mead minimization of
+     negative R² on validation set (instead of fixed weights)
+   - Final predictions clipped to [0, inf) since demand >= 0
+
+------------------------------------------------------------
+VALIDATION PERFORMANCE
+------------------------------------------------------------
+
+CatBoost training RMSE (final):  ~0.0229
+CatBoost val RMSE (final):       ~0.0280
+(Train and val curves closely tracked — no overfitting observed)
+
+------------------------------------------------------------
+WHAT WE TRIED / NOTES
+------------------------------------------------------------
+
+- Cyclical time encodings outperformed raw hour/minute as features
+  because they capture continuity across midnight and day boundaries
+- Geo-clustering added meaningful spatial grouping beyond just
+  the raw lat/lon
+- Target encoding with K-Fold cross-validation is critical here —
+  plain target encoding on full training set leaks demand info
+  into the features and inflates validation metrics
+- Optimized ensemble weights gave a small but consistent lift
+  over equal weighting
+
+------------------------------------------------------------
+SUBMISSION FILES
+------------------------------------------------------------
+
+  submission.csv       — 41,778 predictions (Index, demand)
+  eda_modeling.ipynb   — Full reproducible notebook
+
+------------------------------------------------------------
+HOW TO REPRODUCE
+------------------------------------------------------------
+
+1. Install requirements:
+   pip install pandas numpy scikit-learn lightgbm xgboost
+       catboost geohash2 scipy
+
+2. Update file paths in notebook cell 1 to point to train.csv
+   and test.csv on your machine
+
+3. Run all notebook cells in order — submission.csv will be
+   saved to the working directory
+
+============================================================
